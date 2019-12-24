@@ -1,0 +1,14 @@
+version: '3.7'
+
+services:
+  sasspiler:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      target: sasspiler-builder
+    volumes:
+      - .:/src
+    command: bash -c "
+      go mod vendor ;
+      CGO_ENABLED=1 GOOS=linux go build -o bin/sasspiler ;
+      echo \"sasspiler binary generated in ./bin\""

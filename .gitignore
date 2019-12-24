@@ -1,0 +1,10 @@
+bin/sasspiler
+vendor
+scripts
+__debug_bin
+debug.test
+docker
+docker-compose.sh
+docker-compose-dev.yml
+DockerfileDev
+.idea
