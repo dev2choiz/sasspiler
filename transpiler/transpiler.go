@@ -46,54 +46,78 @@ func New() *SassTranspiler {
 
 // Transpile scss files in `files` to `dest` directory
 func (tr *SassTranspiler) Run(source, dest string, files []afero.File, imports []string) error {
+	chErr := make(chan error)
+	chDone := make(chan struct{})
+	nbTr := len(files)
 	for _, file := range files {
-		info, err := file.Stat()
-
-		if err != nil {
-			check(file.Close())
-			return err
-		}
-		if info.Size() == 0 {
-			if tr.verbose {
-				log.Println(file.Name(), "is empty")
+		go func(file afero.File) {
+			if err := tr.transpile(source, dest, file, imports); err != nil {
+				chErr <- err
+				return
 			}
-			check(file.Close())
-			continue
-		}
+			chDone <- struct{}{}
+		}(file)
+	}
 
-		root := source
-		if tr.isFile(source) {
-			root = filepath.Dir(file.Name())
-		}
-
-		d := tr.GetDest(root, file.Name(), dest)
-		_ = tr.fs.MkdirAll(filepath.Dir(d), os.FileMode(0755))
-		w, err := tr.fs.Create(d)
-		if err != nil {
-			check(file.Close())
+	// Wait for the end of all transpilations or for one error
+	count := 0
+	for {
+		select {
+		case err := <-chErr:
 			return err
+		case <-chDone:
+			count++
+			if count == nbTr {
+				return nil
+			}
 		}
+	}
+}
 
-		comp, err := NewCompiler(w, file)
-		if err != nil {
-			check(file.Close())
-			return err
-		}
-
-		if err := AddImportPath(comp, imports); err != nil {
-			check(file.Close())
-			return err
-		}
-
-		if err := Compile(comp); err != nil {
-			check(file.Close())
-			return err
-		}
-
-		if tr.verbose {
-			log.Println(file.Name(), "==>", w.Name())
-		}
+// Transpile a unique scss file to `dest` directory
+func (tr *SassTranspiler) transpile(source, dest string, file afero.File, imports []string) error {
+	defer func() {
 		check(file.Close())
+	}()
+
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() == 0 {
+		if tr.verbose {
+			log.Println(file.Name(), "is empty")
+		}
+		return nil
+	}
+
+	root := source
+	if tr.isFile(source) {
+		root = filepath.Dir(file.Name())
+	}
+
+	d := tr.GetDest(root, file.Name(), dest)
+	_ = tr.fs.MkdirAll(filepath.Dir(d), os.FileMode(0755))
+	w, err := tr.fs.Create(d)
+	if err != nil {
+		return err
+	}
+
+	comp, err := NewCompiler(w, file)
+	if err != nil {
+		return err
+	}
+
+	if err := AddImportPath(comp, imports); err != nil {
+		return err
+	}
+
+	if err := Compile(comp); err != nil {
+		return err
+	}
+
+	if tr.verbose {
+		log.Println(file.Name(), "==>", w.Name())
 	}
 
 	return nil

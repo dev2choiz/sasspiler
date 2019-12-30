@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/wellington/go-libsass"
 	"io"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,6 +38,7 @@ var (
 
 func TestMain(m *testing.M) {
 	//setup before to run
+	log.SetOutput(ioutil.Discard)
 	generateFixtures(appFs, src, data)
 
 	os.Exit(m.Run())
